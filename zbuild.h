@@ -211,6 +211,32 @@
 #define HINT_ALIGNED_64(p) HINT_ALIGNED((p),64)
 #define HINT_ALIGNED_4096(p) HINT_ALIGNED((p),4096)
 
+/* The Assume() macro provides hints to compiler and static analyzers about what
+   value range is valid for a variable, helping them optimize for real use.
+   To ensure this does not hide bugs, compilation in debug mode will cause it to
+   check the assumption and throw an error if it fails.
+
+   Example:
+    void process_buffer(char* buf, size_t len) {
+      Assume(len <= 1024);  // Hint to compiler about maximum size
+      ...
+    }
+ */
+#if defined(__clang__) && __clang_major__ >= 4
+  #define z_assume(...) do { __builtin_assume(__VA_ARGS__); } while(0)
+#elif defined(__GNUC__) && __GNUC__ >= 13
+  #define z_assume(...) __attribute__((__assume__(__VA_ARGS__)))
+#elif defined(_MSC_VER) && _MSC_VER >= 1700
+  #define z_assume(...) do { __assume(__VA_ARGS__); } while(0)
+#else
+  #define z_assume(...)
+#endif
+#ifdef ZLIB_DEBUG
+#  define Assume(...) do { if (!(__VA_ARGS__)) z_error("Value assumption failed"); } while (0)
+#else
+#  define Assume(...) z_assume(__VA_ARGS__)
+#endif
+
 /* PADSZ returns needed bytes to pad bpos to pad size
  * PAD_NN calculates pad size and adds it to bpos, returning the result.
  * All take an integer or a pointer as bpos input.
@@ -232,7 +258,7 @@
 #  define Tracec(c, x) {if (z_verbose > 0 && (c)) fprintf x;}
 #  define Tracecv(c, x) {if (z_verbose > 1 && (c)) fprintf x;}
 #else
-#  define Assert(cond, msg)
+#  define Assert(cond, msg) Assume(cond)
 #  define Trace(x)
 #  define Tracev(x)
 #  define Tracevv(x)
